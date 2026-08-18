@@ -83,6 +83,11 @@ function startServer(){
 
   app.use(cors({origin:"*"}));
 
+  app.use((req, res, next) => {
+    console.log("REQUEST:", req.method, req.originalUrl);
+    next();
+  });
+
   app.use(mainRouter);
 
   let user = "test";
