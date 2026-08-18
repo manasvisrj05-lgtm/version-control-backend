@@ -66,6 +66,7 @@ yargs(hideBin(process.argv))
 
 function startServer(){
   const app = express();
+  app.disable("strict routing");
   const port = process.env.PORT || 3000 ;
 
   app.use(bodyParser.json());
