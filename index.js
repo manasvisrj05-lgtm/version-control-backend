@@ -95,7 +95,7 @@ function startServer(){
     }
   });
 
-  io.on("Connection",(socket)=>{
+  io.on("connection", (socket) => {
     socket.on("joinRoom",(userID)=>{
       user = userID;
       console.log("======");
@@ -110,7 +110,7 @@ function startServer(){
     console.log("CRUD operations called");
   });
 
-  httpServer.listen(port,()=>{
+  httpServer.listen(port, "0.0.0.0", () => {
     console.log(`Server is listening to port ${port}`);
-  })
+  });
 }

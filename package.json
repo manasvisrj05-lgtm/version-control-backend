@@ -1,10 +1,13 @@
 {
+  "engines": {
+    "node":"24.19.0"
+  },
   "name": "backend",
   "version": "1.0.0",
   "description": "Version control system",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js start"
   },
   "keywords": [],
   "author": "Manasvi Jadhav",
