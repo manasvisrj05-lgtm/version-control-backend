@@ -56,8 +56,35 @@ async function getCommitsForRepository(req, res) {
   }
 }
 
+async function getCommitById(req, res) {
+  const { commitId } = req.params;
+
+  try {
+    const commit = await Commit.findOne({ commitId });
+
+    if (!commit) {
+      return res.status(404).json({
+        exists: false
+      });
+    }
+
+    res.status(200).json({
+      exists: true,
+      commit
+    });
+
+  } catch (err) {
+    console.error("Error checking commit:", err);
+
+    res.status(500).json({
+      error: "Server error"
+    });
+  }
+}
+
 
 module.exports = {
   createCommit,
-  getCommitsForRepository
+  getCommitsForRepository,
+  getCommitById
 };
