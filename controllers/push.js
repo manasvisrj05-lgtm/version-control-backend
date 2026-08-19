@@ -79,7 +79,7 @@ async function pushRepo() {
       const response = await axios.post(
         `${backendUrl}/commit/create`,
         {
-          repositoryId: repositoryId,
+          repository: repositoryId,
           commitId: commitInfo.commitId,
           message: commitInfo.message,
           author: userId,
