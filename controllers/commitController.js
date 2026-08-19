@@ -1,61 +1,63 @@
 const Commit = require("../models/commitModel");
-const Repository = require("../models/repoModel");
 
 async function createCommit(req, res) {
   const {
-    repositoryId,
     commitId,
+    repository,
     message,
     author
   } = req.body;
 
   try {
-    if (!repositoryId || !commitId || !message || !author) {
-      return res.status(400).json({
-        error: "repositoryId, commitId, message and author are required"
-      });
-    }
-
-    // 1. Check repository
-    const repository = await Repository.findById(repositoryId);
-
-    if (!repository) {
-      return res.status(404).json({
-        error: "Repository not found"
-      });
-    }
-
-    // 2. Create commit
     const commit = new Commit({
       commitId,
-      repository: repositoryId,
+      repository,
       message,
       author
     });
 
-    // 3. Save commit
-    await commit.save();
+    const result = await commit.save();
 
-    // 4. Add commit to repository
-    repository.commits.push(commit._id);
-
-    // 5. Save repository
-    await repository.save();
-
-    return res.status(201).json({
+    res.status(201).json({
       message: "Commit created successfully!",
-      commit
+      commit: result
     });
 
   } catch (err) {
     console.error("Error creating commit:", err);
 
-    return res.status(500).json({
+    res.status(500).json({
       error: "Server error"
     });
   }
 }
 
+
+async function getCommitsForRepository(req, res) {
+  const { repositoryId } = req.params;
+
+  try {
+    const commits = await Commit.find({
+      repository: repositoryId
+    })
+      .populate("author")
+      .sort({ date: -1 });
+
+    res.status(200).json({
+      commits
+    });
+
+  } catch (err) {
+    console.error("Error fetching commits:", err);
+
+    res.status(500).json({
+      error: "Server error"
+    });
+  }
+}
+
+
 module.exports = {
-  createCommit
+  createCommit,
+  getCommitsForRepository
 };
