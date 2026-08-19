@@ -1,58 +1,56 @@
-const mongoose = require("mongoose");
 const Commit = require("../models/commitModel");
 const Repository = require("../models/repoModel");
 
 async function createCommit(req, res) {
-  const { repositoryId, commitId, message, author } = req.body;
+  const {
+    repositoryId,
+    commitId,
+    message,
+    author
+  } = req.body;
 
   try {
-    // Check repository ID
-    if (!mongoose.Types.ObjectId.isValid(repositoryId)) {
+    if (!repositoryId || !commitId || !message || !author) {
       return res.status(400).json({
-        error: "Invalid Repository ID!"
+        error: "repositoryId, commitId, message and author are required"
       });
     }
 
-    // Check author ID
-    if (!mongoose.Types.ObjectId.isValid(author)) {
-      return res.status(400).json({
-        error: "Invalid Author ID!"
-      });
-    }
-
-    // Check repository exists
+    // 1. Check repository
     const repository = await Repository.findById(repositoryId);
 
     if (!repository) {
       return res.status(404).json({
-        error: "Repository not found!"
+        error: "Repository not found"
       });
     }
 
-    // Create commit
-    const newCommit = new Commit({
+    // 2. Create commit
+    const commit = new Commit({
       commitId,
       repository: repositoryId,
       message,
       author
     });
 
-    const savedCommit = await newCommit.save();
+    // 3. Save commit
+    await commit.save();
 
-    // Add commit to repository
-    repository.commits.push(savedCommit._id);
+    // 4. Add commit to repository
+    repository.commits.push(commit._id);
 
+    // 5. Save repository
     await repository.save();
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "Commit created successfully!",
-      commit: savedCommit
+      commit
     });
 
   } catch (err) {
     console.error("Error creating commit:", err);
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Server error"
     });
   }
