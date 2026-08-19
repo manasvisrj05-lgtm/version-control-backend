@@ -35,6 +35,13 @@ const RepositorySchema = new Schema(
         ref: "Issue",
       },
     ],
+
+    commits: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Commit",
+      },
+    ],
   },
   {
     timestamps: true,

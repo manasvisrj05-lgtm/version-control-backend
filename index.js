@@ -16,6 +16,7 @@ const {commitRepo} = require("./controllers/commit");
 const {pushRepo} = require("./controllers/push");
 const {pullRepo} = require("./controllers/pull");
 const {revertRepo} = require("./controllers/revert");
+const { remoteRepo } = require("./controllers/remote");
 const { Socket } = require("dgram");
 
 dotenv.config();
@@ -23,6 +24,19 @@ dotenv.config();
 yargs(hideBin(process.argv))
   .command("start", "Starts a new server", {}, startServer)
   .command("init", "Initialise a new repository", {}, initRepo)
+  .command(
+    "remote <repositoryId>",
+    "Connect local repository to a website repository",
+    (yargs) => {
+      yargs.positional("repositoryId", {
+        describe: "Website repository ID",
+        type: "string"
+      });
+    },
+    (argv) => {
+      remoteRepo(argv.repositoryId);
+    }
+  )
   .command(
     "add <file>",
     "To stage a repository",

@@ -13,15 +13,17 @@ async function commitRepo(message){
 
         const files = await fs.readdir(stagedPath);
         for(const file of files){
-            fs.copyFile(path.join(stagedPath,file), path.join(commitDir,file));
+            await fs.copyFile(path.join(stagedPath,file), path.join(commitDir,file));
         }
 
-        await fs.writeFile(path.join(commitDir,"commits.json"),
+        await fs.writeFile(
+            path.join(commitDir, "commits.json"),
             JSON.stringify({
+                commitId,
                 message,
                 date: new Date().toISOString()
             })
-        )
+        );
         console.log(`Commit ${commitId} created with message ${message}`);
     }catch(err){
         console.error("Error in commiting the file",err);

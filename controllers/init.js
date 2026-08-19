@@ -9,13 +9,17 @@ async function initRepo() {
     try {
         await fs.mkdir(repoPath, { recursive: true });
         await fs.mkdir(commitPath, { recursive: true });
+
         await fs.writeFile(
             configPath,
             JSON.stringify({
-                bucket: process.env.S3_BUCKET
-            })
+                bucket: process.env.S3_BUCKET,
+                backendUrl: process.env.BACKEND_URL,
+                repositoryId: null
+            }, null, 2)
         );
-         console.log("Repository initialised");
+
+        console.log("Repository initialised");
     } catch (err) {
         console.error("Error initialising the repository", err);
     }
