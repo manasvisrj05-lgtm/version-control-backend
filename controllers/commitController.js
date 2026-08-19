@@ -38,10 +38,10 @@ async function getCommitsForRepository(req, res) {
 
   try {
     const commits = await Commit.find({
-      repository: repositoryId
+        repository: repositoryId
     })
-      .populate("author")
-      .sort({ date: -1 });
+    .populate("author", "username email")
+    .sort({ date: -1 });
 
     res.status(200).json({
       commits
