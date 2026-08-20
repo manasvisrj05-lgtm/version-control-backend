@@ -1,5 +1,6 @@
 const express = require("express");
 const dotenv = require("dotenv");
+dotenv.config();
 const mongoose = require("mongoose");
 const cors = require("cors");
 const bodyParser = require("body-parser");
@@ -19,11 +20,21 @@ const {revertRepo} = require("./controllers/revert");
 const { remoteRepo } = require("./controllers/remote");
 const { Socket } = require("dgram");
 
-dotenv.config();
-
 yargs(hideBin(process.argv))
   .command("start", "Starts a new server", {}, startServer)
-  .command("init", "Initialise a new repository", {}, initRepo)
+  .command(
+        "init <repositoryName>",
+        "Initialise a new repository",
+        (yargs) => {
+            yargs.positional("repositoryName", {
+                describe: "Name of the website repository",
+                type: "string"
+            });
+        },
+        (argv) => {
+            initRepo(argv.repositoryName);
+        }
+    )
   .command(
     "remote <repositoryId>",
     "Connect local repository to a website repository",

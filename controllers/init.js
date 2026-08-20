@@ -72,7 +72,7 @@ async function initRepo(repositoryName) {
 
         console.log("Repository initialised successfully!");
         console.log(`Repository: ${repository.name}`);
-        console.log(`Repository ID: ${repository._id}`);
+        console.log(`Repository connected: ${repository.name}`);
 
     } catch (err) {
 
