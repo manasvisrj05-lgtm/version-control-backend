@@ -33,7 +33,22 @@ async function pullRepo() {
       const fileContent = await s3.getObject(params).promise();
       await fs.writeFile(path.join(repoPath, key), fileContent.Body);
 
-      console.log("All commits pulled from S3.");
+      console.log("All commits pushed successfully!");
+
+      // -----------------------------------------
+      // CLEAR LOCAL COMMITS AFTER SUCCESSFUL PUSH
+      // -----------------------------------------
+
+      await fs.rm(commitsPath, {
+        recursive: true,
+        force: true
+      });
+
+      await fs.mkdir(commitsPath, {
+        recursive: true
+      });
+
+      console.log("Local commits cleared.");
     }
   } catch (err) {
     console.error("Unable to pull : ", err);
