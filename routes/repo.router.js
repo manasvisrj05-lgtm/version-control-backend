@@ -7,6 +7,7 @@ repoRouter.post("/repo/create", repoController.createRepository);
 repoRouter.get("/repo/all", repoController.getAllRepositories);
 repoRouter.get("/repo/starred/:userId",repoController.getStarredRepositories);
 repoRouter.get("/repo/:id/files",repoController.getRepositoryFiles);
+repoRouter.get("/repo/:id/file", repoController.getRepositoryFile);
 repoRouter.get("/repo/:id", repoController.fetchRepositoryById);
 repoRouter.get("/repo/name/:name", repoController.fetchRepositoryByName);
 repoRouter.get("/repo/user/:userID", repoController.fetchRepositoriesForCurrentUser);

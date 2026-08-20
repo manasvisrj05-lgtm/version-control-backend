@@ -384,6 +384,66 @@ async function getRepositoryFiles(req, res) {
   }
 }
 
+
+async function getRepositoryFile(req, res) {
+  const { id } = req.params;
+  const { path: filePath } = req.query;
+
+  try {
+    if (!filePath) {
+      return res.status(400).json({
+        error: "File path is required"
+      });
+    }
+
+    // Find repository
+    const repository = await Repository.findById(id);
+
+    if (!repository) {
+      return res.status(404).json({
+        error: "Repository not found"
+      });
+    }
+
+    // Find latest commit
+    const latestCommit = await Commit.findOne({
+      repository: id
+    }).sort({ date: -1 });
+
+    if (!latestCommit) {
+      return res.status(404).json({
+        error: "No commits found"
+      });
+    }
+
+    // S3 path
+    const key = `commits/${latestCommit.commitId}/${filePath}`;
+
+    const params = {
+      Bucket: S3_BUCKET,
+      Key: key
+    };
+
+    const data = await s3.getObject(params).promise();
+
+    const content = data.Body.toString("utf-8");
+
+    res.status(200).json({
+      name: filePath.split("/").pop(),
+      path: filePath,
+      content
+    });
+
+  } catch (err) {
+
+    console.error("Error fetching repository file:", err);
+
+    res.status(500).json({
+      error: "Server error"
+    });
+  }
+}
+
 module.exports = {
   createRepository,
   getAllRepositories,
@@ -395,5 +455,6 @@ module.exports = {
   deleteRepositoryById,
   toggleStarRepository,
   getStarredRepositories,
-  getRepositoryFiles
+  getRepositoryFiles,
+  getRepositoryFile
 };
