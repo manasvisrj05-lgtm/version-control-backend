@@ -1,3 +1,5 @@
+const { s3, S3_BUCKET } = require("../config/aws-config");
+const Commit = require("../models/commitModel");
 const mongoose = require("mongoose");
 const Repository = require("../models/repoModel");
 const User = require("../models/userModel");
@@ -238,6 +240,150 @@ async function getStarredRepositories(req, res) {
     });
   }
 }
+
+async function getRepositoryFiles(req, res) {
+  const { id } = req.params;
+  const requestedPath = req.query.path || "";
+
+  try {
+    // -----------------------------------------
+    // 1. FIND REPOSITORY
+    // -----------------------------------------
+
+    const repository = await Repository.findById(id);
+
+    if (!repository) {
+      return res.status(404).json({
+        error: "Repository not found!",
+      });
+    }
+
+    // -----------------------------------------
+    // 2. CHECK VISIBILITY
+    // -----------------------------------------
+
+    if (!repository.visibility) {
+      // TEMPORARY:
+      // We will connect this to your actual
+      // authentication middleware next.
+
+      const currentUserId = req.user?._id?.toString();
+
+      if (
+        !currentUserId ||
+        currentUserId !== repository.owner.toString()
+      ) {
+        return res.status(403).json({
+          error: "This is a private repository.",
+        });
+      }
+    }
+
+    // -----------------------------------------
+    // 3. FIND LATEST COMMIT
+    // -----------------------------------------
+
+    const latestCommit = await Commit.findOne({
+      repository: repository._id,
+    }).sort({ date: -1 });
+
+    if (!latestCommit) {
+      return res.status(200).json({
+        repository: repository.name,
+        commitId: null,
+        path: requestedPath,
+        files: [],
+      });
+    }
+
+    // -----------------------------------------
+    // 4. CREATE S3 PREFIX
+    // -----------------------------------------
+
+    let prefix = `commits/${latestCommit.commitId}/`;
+
+    if (requestedPath) {
+      prefix += `${requestedPath.replace(/^\/+|\/+$/g, "")}/`;
+    }
+
+    // -----------------------------------------
+    // 5. GET FILES/FOLDERS FROM S3
+    // -----------------------------------------
+
+    const result = await s3
+      .listObjectsV2({
+        Bucket: S3_BUCKET,
+        Prefix: prefix,
+        Delimiter: "/",
+      })
+      .promise();
+
+    // -----------------------------------------
+    // 6. BUILD FILE TREE
+    // -----------------------------------------
+
+    const files = [];
+
+    // Folders
+    if (result.CommonPrefixes) {
+      for (const folder of result.CommonPrefixes) {
+        const folderPath = folder.Prefix;
+
+        const relativeName = folderPath
+          .replace(prefix, "")
+          .replace(/\/$/, "");
+
+        files.push({
+          name: relativeName,
+          type: "folder",
+        });
+      }
+    }
+
+    // Files
+    if (result.Contents) {
+      for (const file of result.Contents) {
+        const filePath = file.Key;
+
+        // Ignore empty directory markers
+        if (filePath === prefix) {
+          continue;
+        }
+
+        const relativeName = filePath.replace(prefix, "");
+
+        files.push({
+          name: relativeName,
+          type: "file",
+          size: file.Size,
+        });
+      }
+    }
+
+    // -----------------------------------------
+    // 7. SEND RESPONSE
+    // -----------------------------------------
+
+    res.status(200).json({
+      repository: repository.name,
+      repositoryId: repository._id,
+      commitId: latestCommit.commitId,
+      path: requestedPath,
+      files,
+    });
+
+  } catch (err) {
+    console.error(
+      "Error fetching repository files:",
+      err
+    );
+
+    res.status(500).json({
+      error: "Server error",
+    });
+  }
+}
+
 module.exports = {
   createRepository,
   getAllRepositories,
@@ -248,5 +394,6 @@ module.exports = {
   toggleVisibilityById,
   deleteRepositoryById,
   toggleStarRepository,
-  getStarredRepositories
+  getStarredRepositories,
+  getRepositoryFiles
 };

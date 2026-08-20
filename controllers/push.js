@@ -4,13 +4,49 @@ const axios = require("axios");
 
 const { s3, S3_BUCKET } = require("../config/aws-config");
 
+async function uploadDirectory(localDir, s3Prefix, commitPath) {
+  const entries = await fs.readdir(localDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const localPath = path.join(localDir, entry.name);
+
+    // Don't upload commits.json
+    if (localPath === commitPath) {
+      continue;
+    }
+
+    const s3Key = `${s3Prefix}/${entry.name}`;
+
+    if (entry.isDirectory()) {
+      // Recursively upload folders
+      await uploadDirectory(localPath, s3Key, commitPath);
+    } else if (entry.isFile()) {
+      // Upload file
+      const fileContent = await fs.readFile(localPath);
+
+      const params = {
+        Bucket: S3_BUCKET,
+        Key: s3Key,
+        Body: fileContent,
+      };
+
+      await s3.upload(params).promise();
+
+      console.log(`Uploaded: ${s3Key}`);
+    }
+  }
+}
+
 async function pushRepo() {
   const repoPath = path.resolve(process.cwd(), ".mygit");
   const commitsPath = path.join(repoPath, "commits");
   const configPath = path.join(repoPath, "config.json");
 
   try {
-    // Read CLI configuration
+    // ------------------------------------------------
+    // READ CLI CONFIGURATION
+    // ------------------------------------------------
+
     const configData = await fs.readFile(configPath, "utf-8");
     const config = JSON.parse(configData);
 
@@ -28,7 +64,10 @@ async function pushRepo() {
       throw new Error("User ID is missing from .mygit/config.json");
     }
 
-    // Get all local commits
+    // ------------------------------------------------
+    // GET ALL LOCAL COMMITS
+    // ------------------------------------------------
+
     const commitDirs = await fs.readdir(commitsPath);
 
     for (const commitDir of commitDirs) {
@@ -41,8 +80,14 @@ async function pushRepo() {
         continue;
       }
 
-      // Read commit information
-      const commitInfoPath = path.join(commitPath, "commits.json");
+      // ------------------------------------------------
+      // READ COMMIT INFORMATION
+      // ------------------------------------------------
+
+      const commitInfoPath = path.join(
+        commitPath,
+        "commits.json"
+      );
 
       const commitInfoData = await fs.readFile(
         commitInfoPath,
@@ -52,28 +97,50 @@ async function pushRepo() {
       const commitInfo = JSON.parse(commitInfoData);
 
       // ------------------------------------------------
-      // PART 1: PUSH FILES TO S3
+      // PART 1: CHECK IF COMMIT ALREADY EXISTS
       // ------------------------------------------------
 
-      const files = await fs.readdir(commitPath);
+      try {
+        const existingCommit = await axios.get(
+          `${backendUrl}/commit/${commitInfo.commitId}`
+        );
 
-      for (const file of files) {
-        const filePath = path.join(commitPath, file);
-        const fileContent = await fs.readFile(filePath);
+        if (existingCommit.data.exists) {
+          console.log(
+            `Commit ${commitInfo.commitId} already exists. Skipping.`
+          );
 
-        const params = {
-          Bucket: S3_BUCKET,
-          Key: `commits/${commitDir}/${file}`,
-          Body: fileContent,
-        };
-
-        await s3.upload(params).promise();
+          continue;
+        }
+      } catch (err) {
+        // 404 means commit doesn't exist
+        if (err.response && err.response.status === 404) {
+          // Continue with upload
+        } else {
+          throw err;
+        }
       }
 
-      console.log(`Commit ${commitDir} uploaded to S3.`);
+      // ------------------------------------------------
+      // PART 2: RECURSIVELY PUSH FILES TO S3
+      // ------------------------------------------------
+
+      console.log(
+        `Uploading files for commit ${commitInfo.commitId}...`
+      );
+
+      await uploadDirectory(
+        commitPath,
+        `commits/${commitDir}`,
+        commitInfoPath
+      );
+
+      console.log(
+        `Commit ${commitDir} files uploaded to S3.`
+      );
 
       // ------------------------------------------------
-      // PART 2: SEND COMMIT INFORMATION TO BACKEND
+      // PART 3: SEND COMMIT INFORMATION TO BACKEND
       // ------------------------------------------------
 
       const response = await axios.post(
@@ -98,7 +165,10 @@ async function pushRepo() {
     console.error("Error pushing:", err.message);
 
     if (err.response) {
-      console.error("Backend response:", err.response.data);
+      console.error(
+        "Backend response:",
+        err.response.data
+      );
     }
   }
 }
