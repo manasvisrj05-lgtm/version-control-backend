@@ -63,7 +63,8 @@ async function initRepo(repositoryName) {
                     bucket: process.env.S3_BUCKET,
                     backendUrl,
                     repositoryId: repository._id,
-                    repositoryName: repository.name
+                    repositoryName: repository.name,
+                    userId: repository.owner._id
                 },
                 null,
                 2
