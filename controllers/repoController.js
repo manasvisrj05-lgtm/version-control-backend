@@ -309,7 +309,8 @@ async function getRepositoryFiles(req, res) {
     // -----------------------------------------
     // 5. GET FILES/FOLDERS FROM S3
     // -----------------------------------------
-
+    console.log("S3_BUCKET =", S3_BUCKET);
+    console.log("S3 object =", s3);
     const result = await s3
       .listObjectsV2({
         Bucket: S3_BUCKET,
