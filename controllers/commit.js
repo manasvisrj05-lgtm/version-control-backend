@@ -2,80 +2,247 @@ const fs = require("fs").promises;
 const path = require("path");
 const { v4: uuidv4 } = require("uuid");
 
+async function copyDirectoryContents(sourceDir, destinationDir) {
+
+    const entries = await fs.readdir(
+        sourceDir,
+        { withFileTypes: true }
+    );
+
+    for (const entry of entries) {
+
+        const source = path.join(
+            sourceDir,
+            entry.name
+        );
+
+        const destination = path.join(
+            destinationDir,
+            entry.name
+        );
+
+        await fs.cp(
+            source,
+            destination,
+            {
+                recursive: true
+            }
+        );
+    }
+}
+
+
 async function commitRepo(message) {
 
     const repoPath = path.resolve(process.cwd(), ".mygit");
-    const stagedPath = path.join(repoPath, "staging");
-    const commitPath = path.join(repoPath, "commits");
+
+    const stagedPath = path.join(
+        repoPath,
+        "staging"
+    );
+
+    const commitsPath = path.join(
+        repoPath,
+        "commits"
+    );
 
     try {
 
         // -----------------------------------------
-        // CHECK STAGING
+        // 1. CHECK STAGING
         // -----------------------------------------
 
         try {
+
             await fs.access(stagedPath);
+
         } catch {
+
             throw new Error(
                 "Nothing is staged. Run 'node index.js add <file>' first."
             );
+
         }
 
-        const stagedFiles = await fs.readdir(stagedPath);
+
+        const stagedFiles = await fs.readdir(
+            stagedPath
+        );
+
 
         if (stagedFiles.length === 0) {
+
             throw new Error(
                 "Nothing is staged. Run 'node index.js add <file>' first."
             );
+
         }
 
+
         // -----------------------------------------
-        // CREATE COMMIT
+        // 2. FIND PREVIOUS COMMIT
+        // -----------------------------------------
+
+        await fs.mkdir(
+            commitsPath,
+            { recursive: true }
+        );
+
+
+        const existingCommits = await fs.readdir(
+            commitsPath,
+            { withFileTypes: true }
+        );
+
+
+        const commitDirectories = existingCommits
+            .filter(entry => entry.isDirectory());
+
+
+        let previousCommit = null;
+
+
+        if (commitDirectories.length > 0) {
+
+            // Sort commits by creation time
+            const commitsWithTime = [];
+
+            for (const commit of commitDirectories) {
+
+                const commitFolder = path.join(
+                    commitsPath,
+                    commit.name
+                );
+
+                const stats = await fs.stat(
+                    commitFolder
+                );
+
+                commitsWithTime.push({
+                    name: commit.name,
+                    time: stats.birthtimeMs
+                });
+
+            }
+
+
+            commitsWithTime.sort(
+                (a, b) => b.time - a.time
+            );
+
+
+            previousCommit =
+                commitsWithTime[0].name;
+
+        }
+
+
+        // -----------------------------------------
+        // 3. CREATE NEW COMMIT
         // -----------------------------------------
 
         const commitId = uuidv4();
+
         const commitDir = path.join(
-            commitPath,
+            commitsPath,
             commitId
         );
+
 
         await fs.mkdir(
             commitDir,
             { recursive: true }
         );
 
+
         // -----------------------------------------
-        // COPY ONLY CURRENT STAGED CONTENT
+        // 4. COPY PREVIOUS COMMIT
         // -----------------------------------------
 
-        for (const item of stagedFiles) {
+        if (previousCommit) {
 
-            const source = path.join(
-                stagedPath,
-                item
-            );
+            const previousCommitDir =
+                path.join(
+                    commitsPath,
+                    previousCommit
+                );
 
-            const destination = path.join(
-                commitDir,
-                item
-            );
 
-            await fs.cp(
-                source,
-                destination,
-                {
-                    recursive: true
+            const previousEntries =
+                await fs.readdir(
+                    previousCommitDir,
+                    {
+                        withFileTypes: true
+                    }
+                );
+
+
+            for (const entry of previousEntries) {
+
+                // Don't copy commit metadata
+                if (entry.name === "commits.json") {
+                    continue;
                 }
+
+
+                const source =
+                    path.join(
+                        previousCommitDir,
+                        entry.name
+                    );
+
+
+                const destination =
+                    path.join(
+                        commitDir,
+                        entry.name
+                    );
+
+
+                await fs.cp(
+                    source,
+                    destination,
+                    {
+                        recursive: true
+                    }
+                );
+
+            }
+
+
+            console.log(
+                "Previous repository state copied."
             );
+
         }
 
+
         // -----------------------------------------
-        // COMMIT METADATA
+        // 5. APPLY NEW STAGED FILES
+        // -----------------------------------------
+
+        await copyDirectoryContents(
+            stagedPath,
+            commitDir
+        );
+
+
+        console.log(
+            "New staged files added to commit."
+        );
+
+
+        // -----------------------------------------
+        // 6. WRITE COMMIT METADATA
         // -----------------------------------------
 
         await fs.writeFile(
-            path.join(commitDir, "commits.json"),
+
+            path.join(
+                commitDir,
+                "commits.json"
+            ),
+
             JSON.stringify(
                 {
                     commitId,
@@ -85,14 +252,17 @@ async function commitRepo(message) {
                 null,
                 2
             )
+
         );
+
 
         console.log(
             `Commit ${commitId} created with message "${message}"`
         );
 
+
         // -----------------------------------------
-        // CLEAR STAGING AFTER COMMIT
+        // 7. CLEAR STAGING
         // -----------------------------------------
 
         await fs.rm(
@@ -103,12 +273,19 @@ async function commitRepo(message) {
             }
         );
 
+
         await fs.mkdir(
             stagedPath,
-            { recursive: true }
+            {
+                recursive: true
+            }
         );
 
-        console.log("Staging area cleared.");
+
+        console.log(
+            "Staging area cleared."
+        );
+
 
     } catch (err) {
 
@@ -116,7 +293,12 @@ async function commitRepo(message) {
             "Error in committing the file:",
             err.message
         );
+
     }
+
 }
 
-module.exports = { commitRepo };
+
+module.exports = {
+    commitRepo
+};
