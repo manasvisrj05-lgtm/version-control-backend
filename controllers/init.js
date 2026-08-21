@@ -10,13 +10,10 @@ async function initRepo(repositoryName) {
     try {
         if (!repositoryName) {
             throw new Error(
-                "Repository name is required.\nExample: node index.js init smart-canteen-management"
+                "Repository name is required.\n" +
+                "Example: node index.js init smart-canteen-management"
             );
         }
-
-        // -----------------------------------------
-        // 1. GET BACKEND URL
-        // -----------------------------------------
 
         const backendUrl = process.env.BACKEND_URL;
 
@@ -26,10 +23,7 @@ async function initRepo(repositoryName) {
             );
         }
 
-        // -----------------------------------------
-        // 2. FIND REPOSITORY BY NAME
-        // -----------------------------------------
-
+        // Find repository by name
         const response = await axios.get(
             `${backendUrl}/repo/name/${encodeURIComponent(repositoryName)}`
         );
@@ -42,26 +36,19 @@ async function initRepo(repositoryName) {
             );
         }
 
-        // For now, use the first matching repository
         const repository = repositories[0];
 
-        // -----------------------------------------
-        // 3. CREATE .mygit
-        // -----------------------------------------
-
+        // Create .mygit
         await fs.mkdir(repoPath, { recursive: true });
         await fs.mkdir(commitPath, { recursive: true });
 
-        // -----------------------------------------
-        // 4. SAVE REPOSITORY INFORMATION
-        // -----------------------------------------
-
+        // Save repository information
         await fs.writeFile(
             configPath,
             JSON.stringify(
                 {
                     bucket: process.env.S3_BUCKET,
-                    backendUrl,
+                    backendUrl: backendUrl,
                     repositoryId: repository._id,
                     repositoryName: repository.name,
                     userId: repository.owner._id
@@ -73,10 +60,10 @@ async function initRepo(repositoryName) {
 
         console.log("Repository initialised successfully!");
         console.log(`Repository: ${repository.name}`);
-        console.log(`Repository connected: ${repository.name}`);
+        console.log(`Repository ID: ${repository._id}`);
+        console.log(`Owner: ${repository.owner.username}`);
 
     } catch (err) {
-
         console.error(
             "Error initialising the repository:",
             err.response?.data || err.message

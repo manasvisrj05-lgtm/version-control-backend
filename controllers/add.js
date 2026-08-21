@@ -8,58 +8,20 @@ async function addRepo(filePath) {
     try {
         await fs.mkdir(stagingPath, { recursive: true });
 
-        // Convert supplied path to absolute path
-        const sourcePath = path.resolve(process.cwd(), filePath);
+        const sourcePath = path.resolve(
+            process.cwd(),
+            filePath
+        );
 
         // Prevent adding .mygit
         if (
             sourcePath === repoPath ||
             sourcePath.startsWith(repoPath + path.sep)
         ) {
-            throw new Error("You cannot add files from inside .mygit");
+            throw new Error(
+                "You cannot add files from inside .mygit"
+            );
         }
-
-        // Check that source exists
-        const stats = await fs.stat(sourcePath);
-
-        // -----------------------------------------
-        // IMPORTANT:
-        // If user runs "add ." then clear staging
-        // and stage everything again.
-        // -----------------------------------------
-
-        if (filePath === ".") {
-            // Remove old staging contents
-            await fs.rm(stagingPath, {
-                recursive: true,
-                force: true
-            });
-
-            await fs.mkdir(stagingPath, { recursive: true });
-
-            // Get everything from project root
-            const items = await fs.readdir(process.cwd());
-
-            for (const item of items) {
-                if (item === ".mygit") {
-                    continue;
-                }
-
-                const source = path.join(process.cwd(), item);
-                const destination = path.join(stagingPath, item);
-
-                await fs.cp(source, destination, {
-                    recursive: true
-                });
-            }
-
-            console.log("All files and folders were staged.");
-            return;
-        }
-
-        // -----------------------------------------
-        // Preserve path relative to project root
-        // -----------------------------------------
 
         const relativePath = path.relative(
             process.cwd(),
@@ -71,15 +33,66 @@ async function addRepo(filePath) {
             relativePath
         );
 
+        const stats = await fs.stat(sourcePath);
+
+        // -----------------------------------------
+        // DIRECTORY
+        // -----------------------------------------
+
+        if (stats.isDirectory()) {
+
+            const ignoredFolders = [
+                ".mygit",
+                "node_modules",
+                ".git"
+            ];
+
+            const entries = await fs.readdir(
+                sourcePath,
+                { withFileTypes: true }
+            );
+
+            for (const entry of entries) {
+
+                if (
+                    entry.isDirectory() &&
+                    ignoredFolders.includes(entry.name)
+                ) {
+                    console.log(
+                        `Skipping: ${entry.name}`
+                    );
+                    continue;
+                }
+
+                const childSource = path.join(
+                    sourcePath,
+                    entry.name
+                );
+
+                const childRelative = path.relative(
+                    process.cwd(),
+                    childSource
+                );
+
+                await addRepo(childRelative);
+            }
+
+            console.log(
+                `Folder ${relativePath || "."} was staged`
+            );
+        }
+
         // -----------------------------------------
         // FILE
         // -----------------------------------------
 
-        if (stats.isFile()) {
+        else {
 
             await fs.mkdir(
                 path.dirname(destinationPath),
-                { recursive: true }
+                {
+                    recursive: true
+                }
             );
 
             await fs.copyFile(
@@ -87,28 +100,17 @@ async function addRepo(filePath) {
                 destinationPath
             );
 
-            console.log(`File ${relativePath} was staged.`);
-        }
-
-        // -----------------------------------------
-        // FOLDER
-        // -----------------------------------------
-
-        else if (stats.isDirectory()) {
-
-            await fs.cp(
-                sourcePath,
-                destinationPath,
-                {
-                    recursive: true
-                }
+            console.log(
+                `File ${relativePath} was staged`
             );
-
-            console.log(`Folder ${relativePath} was staged.`);
         }
 
     } catch (err) {
-        console.error("Error in staging:", err);
+
+        console.error(
+            "Error in staging:",
+            err.message
+        );
     }
 }
 
