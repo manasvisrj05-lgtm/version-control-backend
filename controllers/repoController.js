@@ -243,164 +243,281 @@ async function getStarredRepositories(req, res) {
 
 async function getRepositoryFiles(req, res) {
 
-    const { id } = req.params;
-    const requestedPath = req.query.path || "";
+  const { id } = req.params;
 
-    try {
+  const requestedPath =
+    req.query.path || "";
 
-        // -----------------------------------------
-        // 1. FIND REPOSITORY
-        // -----------------------------------------
 
-        const repository = await Repository.findById(id);
+  try {
 
-        if (!repository) {
-            return res.status(404).json({
-                error: "Repository not found"
-            });
-        }
+    // -----------------------------------------
+    // 1. FIND REPOSITORY
+    // -----------------------------------------
 
-        // -----------------------------------------
-        // 2. GET ALL COMMITS
-        // -----------------------------------------
+    const repository =
+      await Repository.findById(id);
 
-        const commits = await Commit.find({
-            repository: repository._id
-        }).sort({ date: 1 });
 
-        if (commits.length === 0) {
+    if (!repository) {
 
-            return res.status(200).json({
-                repository: repository.name,
-                repositoryId: repository._id,
-                commitId: null,
-                path: requestedPath,
-                files: []
-            });
+      return res.status(404).json({
+        error: "Repository not found"
+      });
 
-        }
-
-        // -----------------------------------------
-        // 3. STORE FINAL REPOSITORY STATE
-        // -----------------------------------------
-
-        const repositoryFiles = new Map();
-
-        // -----------------------------------------
-        // 4. PROCESS COMMITS FROM OLDEST → NEWEST
-        // -----------------------------------------
-
-        for (const commit of commits) {
-
-            let prefix = `commits/${commit.commitId}/`;
-
-            if (requestedPath) {
-
-                prefix +=
-                    `${requestedPath
-                        .replace(/^\/+|\/+$/g, "")}/`;
-
-            }
-
-            const result = await s3.listObjectsV2({
-                Bucket: S3_BUCKET,
-                Prefix: prefix,
-                Delimiter: "/"
-            }).promise();
-
-            // -----------------------------------------
-            // FOLDERS
-            // -----------------------------------------
-
-            if (result.CommonPrefixes) {
-
-                for (const folder of result.CommonPrefixes) {
-
-                    const folderPath = folder.Prefix;
-
-                    const relativeName = folderPath
-                        .replace(prefix, "")
-                        .replace(/\/$/, "");
-
-                    repositoryFiles.set(
-                        `folder:${relativeName}`,
-                        {
-                            name: relativeName,
-                            type: "folder"
-                        }
-                    );
-                }
-            }
-
-            // -----------------------------------------
-            // FILES
-            // -----------------------------------------
-
-            if (result.Contents) {
-
-                for (const file of result.Contents) {
-
-                    const filePath = file.Key;
-
-                    if (filePath === prefix) {
-                        continue;
-                    }
-
-                    const relativeName =
-                        filePath.replace(prefix, "");
-
-                    repositoryFiles.set(
-                        `file:${relativeName}`,
-                        {
-                            name: relativeName,
-                            type: "file",
-                            size: file.Size
-                        }
-                    );
-                }
-            }
-        }
-
-        // -----------------------------------------
-        // 5. CONVERT MAP → ARRAY
-        // -----------------------------------------
-
-        const files = Array.from(
-            repositoryFiles.values()
-        );
-
-        // -----------------------------------------
-        // 6. SEND RESPONSE
-        // -----------------------------------------
-
-        const latestCommit =
-            commits[commits.length - 1];
-
-        res.status(200).json({
-
-            repository: repository.name,
-
-            repositoryId: repository._id,
-
-            commitId: latestCommit.commitId,
-
-            path: requestedPath,
-
-            files
-
-        });
-
-    } catch (err) {
-
-        console.error(
-            "Error fetching repository files:",
-            err
-        );
-
-        res.status(500).json({
-            error: "Server error"
-        });
     }
+
+
+    // -----------------------------------------
+    // 2. CLEAN PATH
+    // -----------------------------------------
+
+    const cleanPath =
+      requestedPath
+        .replace(/\\/g, "/")
+        .replace(/^\/+|\/+$/g, "");
+
+
+    if (
+      cleanPath
+        .split("/")
+        .includes("..")
+    ) {
+
+      return res.status(400).json({
+        error: "Invalid path"
+      });
+
+    }
+
+
+    // -----------------------------------------
+    // 3. FIND LATEST COMMIT
+    // -----------------------------------------
+
+    const latestCommit =
+      await Commit.findOne({
+        repository: id
+      }).sort({
+        date: -1
+      });
+
+
+    if (!latestCommit) {
+
+      return res.status(200).json({
+
+        repository:
+          repository.name,
+
+        repositoryId:
+          repository._id,
+
+        commitId: null,
+
+        path:
+          cleanPath,
+
+        files: []
+
+      });
+
+    }
+
+
+    // -----------------------------------------
+    // 4. CREATE S3 PREFIX
+    // -----------------------------------------
+
+    let prefix =
+      `commits/${latestCommit.commitId}/`;
+
+
+    if (cleanPath) {
+
+      prefix +=
+        `${cleanPath}/`;
+
+    }
+
+
+    // -----------------------------------------
+    // 5. GET S3 OBJECTS
+    // -----------------------------------------
+
+    const result =
+      await s3.listObjectsV2({
+
+        Bucket: S3_BUCKET,
+
+        Prefix: prefix,
+
+        Delimiter: "/"
+
+      }).promise();
+
+
+    const files = [];
+
+
+    // -----------------------------------------
+    // 6. FOLDERS
+    // -----------------------------------------
+
+    if (
+      result.CommonPrefixes
+    ) {
+
+      for (
+        const folder
+        of result.CommonPrefixes
+      ) {
+
+        const relativeName =
+          folder.Prefix
+            .replace(
+              prefix,
+              ""
+            )
+            .replace(
+              /\/$/,
+              ""
+            );
+
+
+        if (!relativeName) {
+          continue;
+        }
+
+
+        files.push({
+
+          name:
+            relativeName,
+
+          type:
+            "folder"
+
+        });
+
+      }
+
+    }
+
+
+    // -----------------------------------------
+    // 7. FILES
+    // -----------------------------------------
+
+    if (
+      result.Contents
+    ) {
+
+      for (
+        const file
+        of result.Contents
+      ) {
+
+        if (
+          file.Key === prefix
+        ) {
+          continue;
+        }
+
+
+        const relativeName =
+          file.Key.replace(
+            prefix,
+            ""
+          );
+
+
+        if (!relativeName) {
+          continue;
+        }
+
+
+        files.push({
+
+          name:
+            relativeName,
+
+          type:
+            "file",
+
+          size:
+            file.Size
+
+        });
+
+      }
+
+    }
+
+
+    // -----------------------------------------
+    // 8. SORT
+    // -----------------------------------------
+
+    files.sort(
+      (a, b) => {
+
+        if (
+          a.type === b.type
+        ) {
+
+          return a.name
+            .localeCompare(
+              b.name
+            );
+
+        }
+
+
+        return a.type === "folder"
+          ? -1
+          : 1;
+
+      }
+    );
+
+
+    // -----------------------------------------
+    // 9. RESPONSE
+    // -----------------------------------------
+
+    res.status(200).json({
+
+      repository:
+        repository.name,
+
+      repositoryId:
+        repository._id,
+
+      commitId:
+        latestCommit.commitId,
+
+      path:
+        cleanPath,
+
+      files
+
+    });
+
+
+  } catch (err) {
+
+    console.error(
+      "Error fetching repository files:",
+      err
+    );
+
+
+    res.status(500).json({
+      error: "Server error"
+    });
+
+  }
 }
 
 async function getRepositoryFile(req, res) {

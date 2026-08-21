@@ -18,6 +18,8 @@ const {pushRepo} = require("./controllers/push");
 const {pullRepo} = require("./controllers/pull");
 const {revertRepo} = require("./controllers/revert");
 const { remoteRepo } = require("./controllers/remote");
+const { statusRepo } = require("./controllers/status");
+const { logRepo } = require("./controllers/log");
 const { Socket } = require("dgram");
 
 yargs(hideBin(process.argv))
@@ -60,6 +62,18 @@ yargs(hideBin(process.argv))
     (argv)=>{
       addRepo(argv.file);
     }
+  )
+  .command(
+    "status",
+    "Show the current repository status",
+    {},
+    statusRepo
+  )
+  .command(
+      "log",
+      "Show commit history",
+      {},
+      logRepo
   )
   .command("commit <message>","Commit the staged files",
     (yargs)=>{

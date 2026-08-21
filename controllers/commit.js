@@ -11,6 +11,11 @@ async function copyDirectoryContents(sourceDir, destinationDir) {
 
     for (const entry of entries) {
 
+        // Don't copy deletion metadata
+        if (entry.name === "deletions.json") {
+            continue;
+        }
+
         const source = path.join(
             sourceDir,
             entry.name
@@ -39,6 +44,11 @@ async function commitRepo(message) {
     const stagedPath = path.join(
         repoPath,
         "staging"
+    );
+
+    const deletionPath = path.join(
+        stagedPath,
+        "deletions.json"
     );
 
     const commitsPath = path.join(
@@ -107,6 +117,7 @@ async function commitRepo(message) {
             // Sort commits by creation time
             const commitsWithTime = [];
 
+
             for (const commit of commitDirectories) {
 
                 const commitFolder = path.join(
@@ -114,9 +125,11 @@ async function commitRepo(message) {
                     commit.name
                 );
 
+
                 const stats = await fs.stat(
                     commitFolder
                 );
+
 
                 commitsWithTime.push({
                     name: commit.name,
@@ -142,6 +155,7 @@ async function commitRepo(message) {
         // -----------------------------------------
 
         const commitId = uuidv4();
+
 
         const commitDir = path.join(
             commitsPath,
@@ -218,7 +232,62 @@ async function commitRepo(message) {
 
 
         // -----------------------------------------
-        // 5. APPLY NEW STAGED FILES
+        // 5. APPLY STAGED DELETIONS
+        // -----------------------------------------
+
+        let deletions = [];
+
+
+        try {
+
+            const deletionData =
+                await fs.readFile(
+                    deletionPath,
+                    "utf8"
+                );
+
+
+            deletions = JSON.parse(
+                deletionData
+            );
+
+        } catch {
+
+            deletions = [];
+
+        }
+
+
+        for (
+            const deletedFile
+            of deletions
+        ) {
+
+            const deletedPath =
+                path.join(
+                    commitDir,
+                    deletedFile
+                );
+
+
+            await fs.rm(
+                deletedPath,
+                {
+                    recursive: true,
+                    force: true
+                }
+            );
+
+
+            console.log(
+                `Deleted from commit: ${deletedFile}`
+            );
+
+        }
+
+
+        // -----------------------------------------
+        // 6. APPLY NEW STAGED FILES
         // -----------------------------------------
 
         await copyDirectoryContents(
@@ -233,7 +302,7 @@ async function commitRepo(message) {
 
 
         // -----------------------------------------
-        // 6. WRITE COMMIT METADATA
+        // 7. WRITE COMMIT METADATA
         // -----------------------------------------
 
         await fs.writeFile(
@@ -262,7 +331,7 @@ async function commitRepo(message) {
 
 
         // -----------------------------------------
-        // 7. CLEAR STAGING
+        // 8. CLEAR STAGING
         // -----------------------------------------
 
         await fs.rm(
